@@ -8,6 +8,7 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toolbar.LayoutParams
 import androidx.appcompat.app.AppCompatActivity
+import pl.wsei.pam.lab01.R
 
 class Lab01Activity : AppCompatActivity() {
     lateinit var mLayout: LinearLayout
@@ -30,9 +31,7 @@ class Lab01Activity : AppCompatActivity() {
         mLayout.addView(mTitle)
         mProgress = ProgressBar(
             this,
-            null,
-            androidx.appcompat.R.attr.progressBarStyle,
-            androidx.appcompat.R.style.Widget_AppCompat_ProgressBar_Horizontal
+            null
         ).also {
             it.max = 100      // Zakres 0..100
             it.progress = 0   // Start od zera

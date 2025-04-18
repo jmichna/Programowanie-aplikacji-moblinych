@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/>
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM"/>
 
     <application
         android:allowBackup="true"
@@ -11,7 +14,15 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Lab01"
+        android:name="pl.wsei.pam.lab06.data.TodoApplication"
         tools:targetApi="31">
+        <receiver
+            android:name="pl.wsei.pam.lab06.data.NotificationBroadcastReceiver"
+            android:enabled="true"
+            />
+        <activity
+            android:name="pl.wsei.pam.lab06.Lab06Activity"
+            android:exported="false" />
         <activity
             android:name="pl.wsei.pam.lab03.Lab03Activity"
             android:exported="false" />
@@ -31,5 +42,8 @@
             </intent-filter>
         </activity>
     </application>
+
+
+
 
 </manifest>

@@ -1,23 +1,24 @@
 package pl.wsei.pam.lab03
 
-import MemoryGameEvent
-import MemoryGameLogic
-import Tile
 import android.view.Gravity
 import android.view.View
 import android.widget.GridLayout
 import android.widget.ImageButton
-import java.util.Stack
 import pl.wsei.pam.lab01.R
+import java.util.Stack
 
 class MemoryBoardView(
     private val gridLayout: GridLayout,
     private val cols: Int,
-    private val rows: Int
+    private val rows: Int,
+    private val savedTileResources: IntArray? = null,
+    private val savedRevealedState: BooleanArray? = null,
+    private val savedMatchedState: BooleanArray? = null
 ) {
-    private val tiles: MutableMap<String, Tile> = mutableMapOf()
+    private val tileList = mutableListOf<Tile>()
+    private val deckResource = R.drawable.baseline_deck_24
 
-    private val icons: List<Int> = listOf(
+    private val icons = listOf(
         R.drawable.baseline_rocket_24,
         R.drawable.baseline_audiotrack_24,
         R.drawable.baseline_launch_24,
@@ -36,70 +37,68 @@ class MemoryBoardView(
         R.drawable.baseline_cast_24,
         R.drawable.baseline_check_box_24,
         R.drawable.baseline_church_24
-
     )
 
-    private val deckResource: Int = R.drawable.baseline_deck_24
+    private val logic = MemoryGameLogic((cols * rows) / 2)
+    private val matchedPair = Stack<Tile>()
 
-    private var onGameChangeStateListener: (MemoryGameEvent) -> Unit = {}
+    private var tileResources = IntArray(cols * rows)
 
-    private val matchedPair: Stack<Tile> = Stack()
-
-    private val logic: MemoryGameLogic = MemoryGameLogic((rows * cols) / 2)
+    private var onGameChangeStateListener: (MemoryGameEvent) -> Unit = { }
 
     init {
-        val neededPairs = (rows * cols) / 2
+        if (savedTileResources == null) {
+            val neededPairs = (cols * rows) / 2
+            val selected = icons.subList(0, neededPairs)
+            val shuffled = (selected + selected).toMutableList()
+            shuffled.shuffle()
 
-        if (neededPairs > icons.size) {
-            throw IllegalStateException(
-                "Potrzeba co najmniej $neededPairs ikon, a mamy tylko ${icons.size}"
-            )
+            for (i in 0 until (cols * rows)) {
+                tileResources[i] = shuffled[i]
+            }
+        } else {
+            tileResources = savedTileResources.copyOf()
         }
 
-        val selectedIcons = icons.subList(0, neededPairs).toMutableList()
+        for (i in tileResources.indices) {
+            val iconRes = tileResources[i]
 
-        val allCards = selectedIcons + selectedIcons
-
-        var index = 0
-        for (i in 0 until rows) {
-            for (j in 0 until cols) {
-                val button = ImageButton(gridLayout.context).also {
-                    it.tag = "$i x $j"
-
-                    val params = GridLayout.LayoutParams().apply {
-                        width = 0
-                        height = 0
-                        setGravity(Gravity.CENTER)
-                        columnSpec = GridLayout.spec(j, 1, 1f)
-                        rowSpec = GridLayout.spec(i, 1, 1f)
-                    }
-                    it.layoutParams = params
-
-                    it.setOnClickListener(::onClickTile)
+            val button = ImageButton(gridLayout.context).also {
+                val layoutParams = GridLayout.LayoutParams().apply {
+                    width = 0
+                    height = 0
+                    setGravity(Gravity.CENTER)
+                    columnSpec = GridLayout.spec(i % cols, 1, 1f)
+                    rowSpec = GridLayout.spec(i / cols, 1, 1f)
                 }
+                it.layoutParams = layoutParams
+                it.setImageResource(deckResource)
+                gridLayout.addView(it)
 
-                gridLayout.addView(button)
-
-                val tileResource = allCards[index]
-                val tile = Tile(button, tileResource, deckResource)
-                tiles[button.tag.toString()] = tile
-
-                index++
+                it.setOnClickListener(::onClickTile)
             }
+
+            val tile = Tile(button, iconRes, deckResource)
+            tileList.add(tile)
+        }
+
+        if (savedRevealedState != null) {
+            setRevealedState(savedRevealedState)
+        }
+
+        if (savedMatchedState != null) {
+            setMatchedState(savedMatchedState)
         }
     }
 
-    private fun onClickTile(v: View) {
-        val tile = tiles[v.tag.toString()] ?: return
+    private fun onClickTile(view: View) {
+        val tile = tileList.firstOrNull { it.button == view } ?: return
+
         matchedPair.push(tile)
+        val result = logic.process { tile.tileResource }
+        onGameChangeStateListener(MemoryGameEvent(matchedPair.toList(), result))
 
-        val matchResult = logic.process {
-            tile.tileResource
-        }
-
-        onGameChangeStateListener(MemoryGameEvent(matchedPair.toList(), matchResult))
-
-        if (matchResult != GameStates.Matching) {
+        if (result != GameStates.Matching) {
             matchedPair.clear()
         }
     }
@@ -108,33 +107,38 @@ class MemoryBoardView(
         onGameChangeStateListener = listener
     }
 
-    fun getState(): IntArray {
-        val total = rows * cols
-        val array = IntArray(total) { -1 }
-        var index = 0
-
-        for (i in 0 until rows) {
-            for (j in 0 until cols) {
-                val tile = tiles["$i x $j"]
-                if (tile?.revealed == true) {
-                    array[index] = tile.tileResource
-                }
-                index++
-            }
-        }
-        return array
+    fun getTileResources(): IntArray {
+        return tileResources.copyOf()
     }
 
-    fun setState(state: IntArray) {
-        if (state.size != rows * cols) return
-        var idx = 0
+    fun getRevealedState(): BooleanArray {
+        val arr = BooleanArray(tileList.size)
+        tileList.forEachIndexed { i, tile ->
+            arr[i] = tile.revealed
+        }
+        return arr
+    }
 
-        for (i in 0 until rows) {
-            for (j in 0 until cols) {
-                val tile = tiles["$i x $j"] ?: continue
-                val resource = state[idx]
-                tile.revealed = (resource >= 0)
-                idx++
+    fun getMatchedState(): BooleanArray {
+        val arr = BooleanArray(tileList.size)
+        tileList.forEachIndexed { i, tile ->
+            arr[i] = tile.matched
+        }
+        return arr
+    }
+
+    fun setRevealedState(state: BooleanArray) {
+        tileList.forEachIndexed { i, tile ->
+            tile.revealed = state[i]
+        }
+    }
+
+    fun setMatchedState(state: BooleanArray) {
+        tileList.forEachIndexed { i, tile ->
+            tile.matched = state[i]
+            if (tile.matched) {
+                tile.removeOnClickListener()
+                tile.button.alpha = 0f
             }
         }
     }
